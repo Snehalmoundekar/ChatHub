@@ -30,8 +30,8 @@ Auth	JWT & bcrypt
 
 Hosting	GitHub Pages + Render
 
-🌍 Live Demo
-Service	URL
+🌍 Live Demo</br>
+Service	URL</br>
 Frontend	https://snehalmoundekar.github.io/ChatHub/ </br>
 Backend	https://chat-backend-li55.onrender.com
 
