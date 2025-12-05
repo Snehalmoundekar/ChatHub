@@ -12,22 +12,36 @@ Perfect for interactive communication and social connectivity!
 🔍 Search users and start conversation instantly
 
 ⚡ Real-time messaging using Socket.IO
+
 📄 Send Documents, Images, and Videos
+
 → Supports single & multiple files
+
 🗑️ Delete message for everyone / self
+
 🧹 Clear entire chat history
+
 📋 Copy & Forward messages
+
 🟢 Online / Offline status indicator
+
 📱 Mobile Responsive UI
+
 ☁ Hosted Frontend + Backend
 
 🛠 Tech Stack
 Layer	Technology
+
 Frontend	React.js, React Router, Axios
+
 Backend	Node.js, Express.js
+
 Database	MongoDB Atlas
+
 Real-Time	Socket.IO
+
 Auth	JWT & bcrypt
+
 Hosting	GitHub Pages + Render
 
 🌍 Live Demo
@@ -40,3 +54,6 @@ Backend	https://chat-backend-li55.onrender.com
 Snehal Moundekar
 Passionate Frontend Developer — React & JavaScript
 🔗 GitHub: https://github.com/Snehalmoundekar
+🌐 Portfolio: https://github.com/Snehalmoundekar/snehal-portfolio
+
+
