@@ -1,7 +1,9 @@
 💬 ChatHub | Real-Time MERN Chat App
 
-A modern and secure full-stack chat application built using the MERN stack, featuring real-time messaging, media sharing, profile management, and a smooth user experience with WebSockets. 🚀
-Perfect for interactive communication and social connectivity!
+ChatHub is a full-stack real-time chat application built using the MERN stack.
+Users can register, log in, update their profile, search for other users, and chat instantly using WebSockets.
+It also supports sending documents, single and multiple images, and videos at once.
+Users can clear chat history, delete messages for everyone, copy messages, and forward messages as well.
 
 ✨ Features
 
