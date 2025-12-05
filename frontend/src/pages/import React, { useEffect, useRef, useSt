@@ -1,0 +1,1111 @@
+import React, { useEffect, useRef, useState } from "react";
+import io from "socket.io-client";
+import axios from "axios";
+import "../components/chat/Chat.css";
+import Sidebar from "../components/chat/Sidebar";
+import ChatWindow from "../components/chat/ChatWindow";
+import UserPopup from "../components/chat/UserPopup";
+import ClearChatPopup from "../components/chat/ClearChatPopup";
+
+const socket = io("http://localhost:5000");
+
+function Chat() {
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [fileInputRef, setFileInputRef] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showProfilePage, setShowProfilePage] = useState(false);
+  const currentUser = JSON.parse(localStorage.getItem("user"));
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [profileData, setProfileData] = useState({
+    username: currentUser?.username || "",
+    fullName: currentUser?.fullName || "",
+    email: currentUser?.email || "",
+    phone: currentUser?.phone || "",
+    profileImage: currentUser?.profileImage || "",
+  });
+  const [alertMsg, setAlert] = useState({ message: "", type: "" });
+  const messagesEndRef = React.useRef(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef(null);
+  const [showUserPopup, setShowUserPopup] = useState(false);
+  // const [selectedImage, setSelectedImage] = useState(null);
+  // const [previewImage, setPreviewImage] = useState(null);
+
+  // multiple images 
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [previewImages, setPreviewImages] = useState([]);
+
+
+  const [showOptions, setShowOptions] = useState(false);
+  const [showClearPopup, setShowClearPopup] = useState(false);
+  const dropdownRef = useRef(null);
+  const ProfiledropdownRef = useRef(null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const attacheRef = useRef(null);
+  
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [previewVideo, setPreviewVideo] = useState(null);
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [previewLocation, setPreviewLocation] = useState(null);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
+  const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [messageToForward, setMessageToForward] = useState(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [showDeleteOptionsPopup, setShowDeleteOptionsPopup] = useState(false);
+  const [searchforwardTerm, setSearchforwardTerm] = useState("");
+  const selectedMessage = messages.find(m => m._id === selectedMessageId);
+  const forwardRef = useRef(null);
+  const deleteMessageRef = useRef(null);
+  const clearchatRef = useRef(null);
+
+  // 1) Helper: check whether a message is allowed to be copied
+  const isCopyAllowed = (msg) => {
+    if (!msg) return false;
+
+    const hasText = !!msg.text;
+    const hasImage = !!msg.image;
+    const hasVideo = !!msg.video;
+    const hasDoc = !!msg.doc;
+    const isLocationLink = msg.text && msg.text.startsWith("https://www.google.com/maps");
+
+    return hasText && !hasImage && !hasVideo && !hasDoc && !isLocationLink;
+  };
+
+  // 2) Main function: copyMessage
+  const copyMessage = (id) => {
+    const msg = messages.find(m => m._id === id);
+    if (!msg) {
+      console.warn("copyMessage: message not found for id:", id);
+      return false;
+    }
+
+    const allowed = isCopyAllowed(msg);
+    if (!allowed) {
+      console.info("copyMessage: copy not allowed for this message type");
+      setSelectedMessageId(null);
+      return false;
+    }
+
+    try {
+      navigator.clipboard.writeText(msg.text);
+      setShowCopiedToast(true);
+      setTimeout(() => setShowCopiedToast(false), 2000);
+    } catch (err) {
+      console.error("copyMessage: failed to copy:", err);
+    }
+
+    setSelectedMessageId(null);
+    return true;
+  };
+
+  const forwardMessage = (id) => {
+    const msg = messages.find((m) => m._id === id);
+    if (!msg) return;
+
+    setMessageToForward(msg);      // store message for forwarding
+    setSelectedMessageId(null);    // clear selection
+    setShowOptions(false);         // close dropdown
+    setShowForwardModal(true);     // open forward modal
+  };
+
+  const handleForwardToUser = (user) => {
+    if (!messageToForward) return;
+
+    socket.emit("sendMessage", {
+      sender: currentUser._id,
+      receiver: user._id,
+      text: messageToForward.text || "",
+      image: messageToForward.image || null,
+      video: messageToForward.video || null,
+      doc: messageToForward.doc || null,
+      location: messageToForward.location || null,
+      forwarded: true,
+    });
+
+    // ✅ Update sidebar immediately
+    setUsers((prevUsers) => {
+      let updatedUsers = prevUsers.map((u) =>
+        u._id === user._id
+          ? {
+            ...u,
+            lastMessage:
+              messageToForward.text ||
+              (messageToForward.image && "Image") ||
+              (messageToForward.video && "Video") ||
+              (messageToForward.doc && "Document") ||
+              (messageToForward.location && "Location") ||
+              "Forwarded message",
+            lastMessageTime: new Date().toISOString(),
+            unreadCount: 0,
+          }
+          : u
+      );
+
+      updatedUsers.sort(
+        (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+      );
+
+      return [...updatedUsers];
+    });
+
+    setShowForwardModal(false);
+    setSearchforwardTerm("");
+    setMessageToForward(null);
+  };
+
+  /* ---------------- send location  ---------------- */
+  const sendLocationMessage = async () => {
+    if (!previewLocation) return;
+
+    try {
+      const res = await axios.post(
+        "http://localhost:5000/api/chat/send-location",
+        {
+          sender: currentUser._id,
+          receiver: selectedUser._id,
+          latitude: previewLocation.latitude,
+          longitude: previewLocation.longitude,
+        }
+      );
+
+      setMessages((prev) => [...prev, res.data]);
+      setPreviewLocation(null);
+
+    } catch (error) {
+      alert("Failed to send location.");
+      console.error(error);
+    }
+  };
+
+  /* ---------------- file picker  ---------------- */
+  const openFilePicker = (type) => {
+    const input = document.createElement("input");
+    input.type = "file";
+
+    if (type === "image") {
+      input.accept = "image/*";
+      input.multiple = true; // 👈 ENABLE MULTIPLE
+    }
+    if (type === "video") input.accept = "video/*";
+    if (type === "doc") input.accept = ".pdf,.doc,.docx,.xls,.xlsx,.txt";
+
+    input.onchange = (e) => {
+      const files = Array.from(e.target.files);
+
+      if (type === "image") {
+        // MULTIPLE IMAGE SELECTED
+        setSelectedImages(null);
+        setPreviewImages(null);
+
+        setSelectedImages(files);
+        setPreviewImages(files.map(f => URL.createObjectURL(f)));
+
+        return; // 👈 STOP HERE (don't call handleSelectedFile)
+      }
+
+      // SINGLE FILE SELECT
+      const file = files[0];
+      handleSelectedFile(type, file);
+    };
+
+
+    input.click();   // open picker
+    setShowAttachMenu(false);
+  };
+
+  const handleSelectedFile = (type, file) => {
+    setSelectedImages(null);
+    setPreviewImages(null);
+
+    setSelectedVideo(null);
+    setPreviewVideo(null);
+
+    setSelectedDoc(null);
+    setPreviewDoc(null);
+    // if (type === "image") {
+    //   setSelectedImage(file);
+    //   setPreviewImage(URL.createObjectURL(file));
+    // }
+
+    if (type === "video") {
+      setSelectedVideo(file);
+      setPreviewVideo(URL.createObjectURL(file));
+    }
+
+    if (type === "doc") {
+      setSelectedDoc(file);
+      setPreviewDoc(URL.createObjectURL(file));
+    }
+  };
+
+  /* ---------------- Add outside click close logic inside useEffect ---------------- */
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        attacheRef.current &&
+        !attacheRef.current.contains(event.target)
+      ) {
+        setShowAttachMenu(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target)
+      ) {
+        setShowOptions(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        forwardRef.current &&
+        !forwardRef.current.contains(event.target)
+      ) {
+        setShowForwardModal(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        clearchatRef.current &&
+        !clearchatRef.current.contains(event.target)
+      ) {
+        setShowClearPopup(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        deleteMessageRef.current &&
+        !deleteMessageRef.current.contains(event.target)
+      ) {
+        setShowDeleteOptionsPopup(false);
+        setSelectedMessageId(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  /* ---------------- Add outside click close logic for profile ---------------- */
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        ProfiledropdownRef.current &&
+        !ProfiledropdownRef.current.contains(event.target)
+      ) {
+        setShowProfileMenu(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  /* ---------------- Clear chat ---------------- */
+  const handleClearChat = () => {
+    if (!selectedUser) return;
+    setShowClearPopup(true); // open popup
+  };
+
+  /* ---------------- Handle Image Selection ---------------- */
+  // const handleImageSelect = (e) => {
+  //   const file = e.target.files[0];
+  //   if (file) {
+  //     setSelectedImage(file);
+  //     setPreviewImage(URL.createObjectURL(file));
+  //   }
+  //   e.target.value = "";
+  // };
+
+  /* ---------------- Send Image Message ---------------- */
+  // const sendImageMessage = async () => {
+  //   if (!selectedImage && !text.trim()) return;
+
+  //   const formData = new FormData();
+  //   formData.append("sender", currentUser._id);
+  //   formData.append("receiver", selectedUser._id);
+  //   if (selectedImage) formData.append("image", selectedImage);
+  //   if (text.trim()) formData.append("text", text);
+
+  //   try {
+  //     const res = await axios.post(
+  //       "http://localhost:5000/api/chat/upload-image",
+  //       formData,
+  //       { headers: { "Content-Type": "multipart/form-data" } }
+  //     );
+
+  //     // ✅ 1. Add to local messages
+  //     setMessages((prev) => [...prev, res.data]);
+
+  //     // ✅ 2. Emit socket event so sidebar & receiver update
+  //     // socket.emit("sendMessage", {
+  //     //   sender: currentUser._id,
+  //     //   receiver: selectedUser._id,
+  //     //   text: res.data.text || "",
+  //     //   image: res.data.image || "",
+  //     // });
+
+  //     // ✅ 3. Update sidebar immediately
+  //     setUsers((prevUsers) => {
+  //       let updatedUsers = prevUsers.map((user) =>
+  //         user._id === selectedUser._id
+  //           ? {
+  //             ...user,
+  //             lastMessage: res.data.text || (res.data.image ? "Image" : ""),
+  //             lastMessageTime: new Date().toISOString(),
+  //             unreadCount: 0,
+  //           }
+  //           : user
+  //       );
+  //       updatedUsers.sort(
+  //         (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+  //       );
+  //       return [...updatedUsers];
+  //     });
+
+  //     setSelectedImage(null);
+  //     setPreviewImage(null);
+  //     setText("");
+  //   } catch (err) {
+  //     console.error("Image upload failed:", err);
+  //   }
+  // };
+
+  const sendMultipleImages = async () => {
+    if (selectedImages.length === 0 && !text.trim()) return;
+
+    if (selectedImages.length > 10) {
+      alert("You can upload a maximum of 10 images at a time.");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("sender", currentUser._id);
+    formData.append("receiver", selectedUser._id);
+
+    selectedImages.forEach((img) => {
+      formData.append("images", img); 
+    });
+
+    if (text.trim()) formData.append("text", text);
+
+    try {
+      const res = await axios.post(
+        "http://localhost:5000/api/chat/upload-multiple-images",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      setMessages((prev) => [...prev, ...res.data]); // API returns list
+      // ✅ 3. Update sidebar immediately
+      setUsers((prevUsers) => {
+        let last = res.data[res.data.length - 1];   // 👈 last uploaded file OR text
+
+        let updatedUsers = prevUsers.map((user) =>
+          user._id === selectedUser._id
+            ? {
+              ...user,
+              lastMessage: last.text
+                ? last.text
+                : last.image
+                  ? "Image"
+                  : "",
+              lastMessageTime: new Date().toISOString(),
+              unreadCount: 0,
+            }
+            : user
+        );
+
+        updatedUsers.sort(
+          (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+        );
+
+        return [...updatedUsers];
+      });
+
+      setSelectedImages([]);
+      setPreviewImages([]);
+      setText("");
+    } catch (error) {
+      console.error("Multiple image upload failed:", error);
+    }
+  };
+
+
+  /* ---------------- Send video Message ---------------- */
+  const sendVideoMessage = async () => {
+    if (!selectedVideo && !text.trim()) return;
+
+    const formData = new FormData();
+    formData.append("sender", currentUser._id);
+    formData.append("receiver", selectedUser._id);
+    if (selectedVideo) formData.append("video", selectedVideo);
+    if (text.trim()) formData.append("text", text);
+
+    try {
+      const res = await axios.post(
+        "http://localhost:5000/api/chat/upload-video",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      setMessages((prev) => [...prev, res.data]);
+
+      setUsers((prevUsers) =>
+        prevUsers.map((user) =>
+          user._id === selectedUser._id
+            ? {
+              ...user,
+              lastMessage: res.data.text || (res.data.video ? "Video" : ""),
+              lastMessageTime: new Date().toISOString(),
+              unreadCount: 0,
+            }
+            : user
+        )
+      );
+
+      setSelectedVideo(null);
+      setPreviewVideo(null);
+      setText("");
+    } catch (err) {
+      console.error("Video upload failed:", err);
+    }
+  };
+
+  /* ---------------- Send doc Message ---------------- */
+  const senddocMessage = async () => {
+    if (!selectedDoc && !text.trim()) return;
+
+    const formData = new FormData();
+    formData.append("sender", currentUser._id);
+    formData.append("receiver", selectedUser._id);
+    if (selectedDoc) formData.append("doc", selectedDoc);
+    if (text.trim()) formData.append("text", text);
+
+    try {
+      const res = await axios.post(
+        "http://localhost:5000/api/chat/upload-doc",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      setMessages((prev) => [...prev, res.data]);
+
+      setUsers((prevUsers) =>
+        prevUsers.map((user) =>
+          user._id === selectedUser._id
+            ? {
+              ...user,
+              lastMessage: res.data.text || (res.data.doc ? "Document" : ""),
+              lastMessageTime: new Date().toISOString(),
+              unreadCount: 0,
+            }
+            : user
+        )
+      );
+
+      setSelectedDoc(null);
+      setPreviewDoc(null);
+      setText("");
+    } catch (err) {
+      console.error("Doc upload failed:", err);
+    }
+  };
+
+  /* ---------------- Emoji picker ---------------- */
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
+
+  /* ---------------- Filtered Users ---------------- */
+  const filteredUsers = users.filter((user) =>
+    user.username.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  /* ---------------- Fetch Users ---------------- */
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const res = await axios.get(
+        `http://localhost:5000/api/chat/users/${currentUser._id}`
+      );
+      const usersWithUnread = res.data.map((u) => ({
+        ...u,
+        unreadCount: u.unreadCount || 0,
+      }));
+      setUsers(usersWithUnread);
+    };
+    fetchUsers();
+  }, [currentUser._id]);
+
+  /* ---------------- Socket Setup ---------------- */
+  useEffect(() => {
+    socket.emit("userOnline", currentUser._id);
+
+
+    socket.on("receiveMessage", (msg) => {
+      if (
+        (msg.sender === selectedUser?._id && msg.receiver === currentUser._id) ||
+        (msg.sender === currentUser._id && msg.receiver === selectedUser?._id)
+      ) {
+        setMessages((prev) => [...prev, msg]);
+      }
+
+      setUsers((prevUsers) => {
+        let updatedUsers = prevUsers.map((user) => {
+          if (user._id === msg.sender || user._id === msg.receiver) {
+            const isReceiver = msg.receiver === currentUser._id;
+            const isChatOpen = selectedUser?._id === msg.sender;
+            return {
+              ...user,
+              lastMessage: msg.text
+                ? msg.text
+                : msg.image
+                  ? "Image"
+                  : msg.video
+                    ? "Video"
+                    : msg.doc
+                      ? "Document"
+                      : "",
+              lastMessageTime: msg.createdAt,
+              unreadCount:
+                isReceiver && !isChatOpen
+                  ? (user.unreadCount || 0) + 1
+                  : isChatOpen
+                    ? 0
+                    : user.unreadCount || 0,
+            };
+          }
+          return user;
+        });
+
+        updatedUsers.sort((a, b) => {
+          const timeA = new Date(a.lastMessageTime || 0);
+          const timeB = new Date(b.lastMessageTime || 0);
+          return timeB - timeA;
+        });
+
+        return [...updatedUsers];
+      });
+    });
+
+    socket.on("messageSent", (msg) => {
+      if (
+        (msg.sender === currentUser._id && msg.receiver === selectedUser?._id)
+      ) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    });
+
+    socket.on("messageDelivered", (msg) => {
+      setMessages(prev =>
+        prev.map(m =>
+          m._id === msg._id ? { ...m, delivered: true } : m
+        )
+      );
+    });
+
+
+    socket.on("messageSeen", ({ sender, receiver }) => {
+      // ✅ FIXED keys for consistency
+      if (receiver === currentUser._id && selectedUser?._id === sender) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender === currentUser._id ? { ...m, seen: true } : m
+          )
+        );
+      }
+    });
+
+    return () => {
+      socket.off("receiveMessage");
+      socket.off("messageSent");
+      socket.off("messageDelivered");
+      socket.off("messageSeen");
+    };
+  }, [selectedUser, currentUser._id]);
+
+
+  /* ---------------- Auto Scroll ---------------- */
+  useEffect(() => {
+    if (!messagesEndRef.current) return;
+
+    const images = document.querySelectorAll(".chat-messages img");
+
+    // If there are no images, scroll immediately (for text messages)
+    if (images.length === 0) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+
+    // Otherwise, wait for all images to load before scrolling
+    let loaded = 0;
+    images.forEach((img) => {
+      if (img.complete) {
+        loaded++;
+        if (loaded === images.length) {
+          messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      } else {
+        img.onload = () => {
+          loaded++;
+          if (loaded === images.length) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+          }
+        };
+        img.onerror = () => {
+          loaded++;
+          if (loaded === images.length) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+          }
+        };
+      }
+    });
+  }, [messages]);
+
+
+  /* ---------------- Load Chat ---------------- */
+  const loadMessages = async (user) => {
+    setSelectedUser(user);
+    setSidebarOpen(false);
+    setShowProfilePage(false);
+
+    const res = await axios.get(
+      `http://localhost:5000/api/chat/${currentUser._id}/${user._id}`
+    );
+    setMessages(
+      res.data.filter(msg => !msg.deletedFor?.includes(currentUser._id))
+    );
+
+    // ✅ FIXED key names for markAsSeen event
+    socket.emit("markAsSeen", {
+      sender: currentUser._id,
+      receiver: user._id,
+    });
+
+    setUsers((prevUsers) =>
+      prevUsers.map((u) =>
+        u._id === user._id ? { ...u, unreadCount: 0 } : u
+      )
+    );
+  };
+
+  /* ---------------- Send Message ---------------- */
+  const sendMessage = () => {
+    if (!text.trim()) return;
+
+    // ✅ FIXED senderId → sender, receiverId → receiver
+    socket.emit("sendMessage", {
+      sender: currentUser._id,
+      receiver: selectedUser._id,
+      text,
+    });
+
+    setUsers((prevUsers) => {
+      let updatedUsers = prevUsers.map((user) =>
+        user._id === selectedUser._id
+          ? {
+            ...user,
+            lastMessage: text,
+            lastMessageTime: new Date().toISOString(),
+            unreadCount: 0,
+          }
+          : user
+      );
+
+      updatedUsers.sort((a, b) => {
+        const timeA = new Date(a.lastMessageTime || 0);
+        const timeB = new Date(b.lastMessageTime || 0);
+        return timeB - timeA;
+      });
+
+      return [...updatedUsers];
+    });
+
+    setText("");
+  };
+
+
+
+  /* ---------------- Change Profile Image ---------------- */
+  const handleProfileImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("profileImage", file);
+
+    try {
+      const res = await axios.put(
+        `http://localhost:5000/api/auth/update-profile-image/${currentUser._id}`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      const updatedUser = res.data.user;
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      setProfileData((prev) => ({
+        ...prev,
+        profileImage: updatedUser.profileImage,
+      }));
+    } catch (err) {
+      alert("Failed to update profile image");
+    }
+  };
+
+  /* ---------------- Handle Profile Save ---------------- */
+  const handleProfileSave = async () => {
+    try {
+      const res = await axios.put(
+        `http://localhost:5000/api/auth/update-profile-details/${currentUser._id}`,
+        profileData
+      );
+
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      setIsEditing(false);
+
+      setAlert({
+        message: "Profile updated successfully!",
+        type: "success",
+      });
+
+      setTimeout(() => setAlert({ message: "", type: "" }), 3000);
+    } catch (err) {
+      const errorMsg =
+        err.response && err.response.data && err.response.data.msg
+          ? err.response.data.msg
+          : "Failed to update profile";
+
+      setAlert({
+        message: errorMsg,
+        type: "danger",
+      });
+
+      setTimeout(() => setAlert({ message: "", type: "" }), 4000);
+    }
+  };
+
+  const deleteMessage = async (id) => {
+    try {
+      await axios.delete(
+        `http://localhost:5000/api/chat/delete/${id}/${currentUser._id}`
+      );
+
+      setMessages((prev) => {
+        const updated = prev.filter((m) => m._id !== id);
+
+        // --- UPDATE SIDEBAR DIRECTLY ---
+        const lastMsg = updated[updated.length - 1];
+
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u._id === selectedUser._id
+              ? {
+                ...u,
+                lastMessage:
+                  lastMsg
+                    ? lastMsg.text ||
+                    (lastMsg.image && "Image") ||
+                    (lastMsg.video && "Video") ||
+                    (lastMsg.doc && "Document") ||
+                    (lastMsg.location && "Location") ||
+                    (lastMsg.forwarded && "Forwarded message")
+                    : "", // empty if no messages left
+                lastMessageTime: lastMsg ? lastMsg.createdAt : "",
+                unreadCount: 0,
+              }
+              : u
+          )
+        );
+
+        return updated;
+      });
+      setSelectedMessageId(null);
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
+  };
+
+  const deleteMessageEveryone = async (id) => {
+    try {
+      await axios.delete(`http://localhost:5000/api/chat/delete-everyone/${id}`);
+
+      setMessages((prev) => {
+        const updated = prev.map((m) =>
+          m._id === id
+            ? {
+              ...m,
+              text: "This message was deleted",
+              image: null,
+              video: null,
+              doc: null,
+              document: null,
+              docName: null,
+              fileUrl: null,
+              fileSize: null,
+              location: null,
+              isDeletedForEveryone: true,
+            }
+            : m
+        );
+
+        // --- UPDATE SIDEBAR DIRECTLY ---
+        const lastMsg = updated[updated.length - 1];
+
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u._id === selectedUser._id
+              ? {
+                ...u,
+                lastMessage:
+                  lastMsg
+                    ? lastMsg.isDeletedForEveryone
+                      ? "This message was deleted"
+                      : lastMsg.text ||
+                      (lastMsg.image && "Image") ||
+                      (lastMsg.video && "Video") ||
+                      (lastMsg.doc && "Document") ||
+                      (lastMsg.location && "Location") ||
+                      (lastMsg.forwarded && "Forwarded message")
+                    : "",
+                lastMessageTime: lastMsg ? lastMsg.createdAt : "",
+                unreadCount: 0,
+              }
+              : u
+          )
+        );
+
+        return updated;
+      });
+
+      setSelectedMessageId(null);
+    } catch (err) {
+      console.error("Delete for everyone error:", err);
+    }
+  };
+
+  useEffect(() => {
+    socket.on("messageDeletedForEveryone", ({ messageId, updatedMessage }) => {
+      // 1) Update chat messages
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === messageId ? { ...msg, ...updatedMessage } : msg
+        )
+      );
+
+      // 2) Update sidebar for selected user
+      setUsers((prevUsers) =>
+        prevUsers.map((u) => {
+          if (selectedUser && u._id === selectedUser._id) {
+            return {
+              ...u,
+              lastMessage: "This message was deleted",
+              lastMessageTime: updatedMessage.createdAt,
+            };
+          }
+          return u;
+        })
+      );
+    });
+
+    return () => {
+      socket.off("messageDeletedForEveryone");
+    };
+  }, [selectedUser]);
+
+
+
+  // online / offline dot show 
+  useEffect(() => {
+    socket.on("updateUserStatus", ({ userId, isOnline }) => {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u._id === userId ? { ...u, isOnline } : u
+        )
+      );
+    });
+
+    return () => {
+      socket.off("updateUserStatus");
+    };
+  }, []);
+
+
+
+  /* ---------------- Render ---------------- */
+  return (
+    <div className={`chat-container ${showProfilePage ? "profile-open" : ""}`}>
+      {/* ✅ SIDEBAR */}
+      <Sidebar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        currentUser={currentUser}
+        ProfiledropdownRef={ProfiledropdownRef}
+        showProfileMenu={showProfileMenu}
+        setShowProfileMenu={setShowProfileMenu}
+        setSelectedUser={setSelectedUser}
+        setShowProfilePage={setShowProfilePage}
+        setFileInputRef={setFileInputRef}
+        handleProfileImageChange={handleProfileImageChange}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filteredUsers={filteredUsers}
+        selectedUser={selectedUser}
+        loadMessages={loadMessages}
+      />
+
+      {/* ✅ CHAT WINDOW OR PROFILE */}
+      <ChatWindow
+        alertMsg={alertMsg}
+        showProfilePage={showProfilePage}
+        setShowProfilePage={setShowProfilePage}
+        setSidebarOpen={setSidebarOpen}
+        profileData={profileData}
+        fileInputRef={fileInputRef}
+        setFileInputRef={setFileInputRef}
+        handleProfileImageChange={handleProfileImageChange}
+        isEditing={isEditing}
+        setIsEditing={setIsEditing}
+        handleProfileSave={handleProfileSave}
+        selectedUser={selectedUser}
+        showOptions={showOptions}
+        dropdownRef={dropdownRef}
+        setShowOptions={setShowOptions}
+        handleClearChat={handleClearChat}
+        messages={messages}
+        messagesEndRef={messagesEndRef}
+        currentUser={currentUser}
+        // previewImage={previewImage}
+        // setSelectedImage={setSelectedImage}
+        // setPreviewImage={setPreviewImage}
+        previewVideo={previewVideo}
+        setSelectedVideo={setSelectedVideo}
+        setPreviewVideo={setPreviewVideo}
+        setSelectedDoc={setSelectedDoc}
+        setPreviewDoc={setPreviewDoc}
+        previewDoc={previewDoc}
+        text={text}
+        setText={setText}
+        emojiPickerRef={emojiPickerRef}
+        showEmojiPicker={showEmojiPicker}
+        setShowEmojiPicker={setShowEmojiPicker}
+        showAttachMenu={showAttachMenu}
+        setShowAttachMenu={setShowAttachMenu}
+        attacheRef={attacheRef}
+        openFilePicker={openFilePicker}
+        // sendImageMessage={sendImageMessage}
+        sendVideoMessage={sendVideoMessage}
+        senddocMessage={senddocMessage}
+        sendMessage={sendMessage}
+        setShowUserPopup={setShowUserPopup}
+        previewLocation={previewLocation}
+        setPreviewLocation={setPreviewLocation}
+        sendLocationMessage={sendLocationMessage}
+        selectedMessageId={selectedMessageId}
+        setSelectedMessageId={setSelectedMessageId}
+        copyMessage={copyMessage}
+        showCopiedToast={showCopiedToast}
+        setShowCopiedToast={setShowCopiedToast}
+        forwardMessage={forwardMessage}
+        showForwardModal={showForwardModal}
+        users={users}
+        handleForwardToUser={handleForwardToUser}
+        setShowForwardModal={setShowForwardModal}
+        isCopyAllowed={isCopyAllowed}
+        selectedMessage={selectedMessage}
+        setSearchforwardTerm={setSearchforwardTerm}
+        searchforwardTerm={searchforwardTerm}
+        forwardRef={forwardRef}
+        deleteMessage={deleteMessage}
+        deleteMessageEveryone={deleteMessageEveryone}
+        deleteMessageRef={deleteMessageRef}
+        showDeleteOptionsPopup={showDeleteOptionsPopup}
+        setShowDeleteOptionsPopup={setShowDeleteOptionsPopup}
+        previewImages={previewImages}
+        setSelectedImages={setSelectedImages}
+        setPreviewImages={setPreviewImages}
+        sendMultipleImages={sendMultipleImages}
+        selectedImages={selectedImages}
+      />
+
+      <UserPopup
+        showUserPopup={showUserPopup}
+        selectedUser={selectedUser}
+        setShowUserPopup={setShowUserPopup}
+      />
+
+      <ClearChatPopup
+        showClearPopup={showClearPopup}
+        selectedUser={selectedUser}
+        currentUser={currentUser}
+        setShowClearPopup={setShowClearPopup}
+        setShowOptions={setShowOptions}
+        setMessages={setMessages}
+        setUsers={setUsers}
+        clearchatRef={clearchatRef}
+      />
+    </div>
+  );
+}
+export default Chat;
