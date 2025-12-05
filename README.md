@@ -12,46 +12,34 @@ Users can clear chat history, delete messages for everyone, copy messages, and f
 🔍 Search users and start conversation instantly</br>
 ⚡ Real-time messaging using Socket.IO</br>
 📄 Send Documents, Images, and Videos</br>
-
-→ Supports single & multiple files
-
-🗑️ Delete message for everyone / self
-
-🧹 Clear entire chat history
-
-📋 Copy & Forward messages
-
-🟢 Online / Offline status indicator
-
-📱 Mobile Responsive UI
-
-☁ Hosted Frontend + Backend
+→ Supports single & multiple files</br>
+🗑️ Delete message for everyone / self</br>
+🧹 Clear entire chat history</br>
+📋 Copy & Forward messages</br>
+🟢 Online / Offline status indicator</br>
+📱 Mobile Responsive UI</br>
+☁ Hosted Frontend + Backend</br>
 
 🛠 Tech Stack
-Layer	Technology
-
-Frontend	React.js, React Router, Axios
-
-Backend	Node.js, Express.js
-
-Database	MongoDB Atlas
-
-Real-Time	Socket.IO
-
+Layer	Technology</br>
+Frontend	React.js, React Router, Axios</br>
+Backend	Node.js, Express.js</br>
+Database	MongoDB Atlas</br>
+Real-Time	Socket.IO</br>
 Auth	JWT & bcrypt
 
 Hosting	GitHub Pages + Render
 
 🌍 Live Demo
 Service	URL
-Frontend	https://snehalmoundekar.github.io/ChatHub/
+Frontend	https://snehalmoundekar.github.io/ChatHub/ </br>
 Backend	https://chat-backend-li55.onrender.com
 
 👩‍💻 Developer
 
-Snehal Moundekar
-Passionate Frontend Developer — React & JavaScript
-🔗 GitHub: https://github.com/Snehalmoundekar
+Snehal Moundekar</br>
+Passionate Frontend Developer — React & JavaScript</br>
+🔗 GitHub: https://github.com/Snehalmoundekar</br>
 🌐 Portfolio: https://github.com/Snehalmoundekar/snehal-portfolio
 
 
