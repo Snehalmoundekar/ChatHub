@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app); // ✅ create HTTP server
 const io = new Server(server, {
   cors: {
-    origin: "https://snehalmoundekar.github.io/ChatHub", // frontend URL
+    origin: "https://snehalmoundekar.github.io", // frontend URL
     methods: ["GET", "POST"],
   },
 });
