@@ -6,8 +6,11 @@ Perfect for interactive communication and social connectivity!
 ✨ Features
 
 🔐 Sign Up & Login with secure authentication
+
 👤 Profile management with image upload
+
 🔍 Search users and start conversation instantly
+
 ⚡ Real-time messaging using Socket.IO
 📄 Send Documents, Images, and Videos
 → Supports single & multiple files
