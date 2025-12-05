@@ -8,13 +8,10 @@ Users can clear chat history, delete messages for everyone, copy messages, and f
 ✨ Features
 
 🔐 Sign Up & Login with secure authentication </br>
-👤 Profile management with image upload
-
-🔍 Search users and start conversation instantly
-
-⚡ Real-time messaging using Socket.IO
-
-📄 Send Documents, Images, and Videos
+👤 Profile management with image upload</br>
+🔍 Search users and start conversation instantly</br>
+⚡ Real-time messaging using Socket.IO</br>
+📄 Send Documents, Images, and Videos</br>
 
 → Supports single & multiple files
 
