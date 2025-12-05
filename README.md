@@ -7,7 +7,7 @@ Users can clear chat history, delete messages for everyone, copy messages, and f
 
 ✨ Features
 
-🔐 Sign Up & Login with secure authentication
+🔐 Sign Up & Login with secure authentication </br>
 👤 Profile management with image upload
 
 🔍 Search users and start conversation instantly
