@@ -5,6 +5,10 @@ Users can register, log in, update their profile, search for other users, and ch
 It also supports sending documents, single and multiple images, and videos at once.
 Users can clear chat history, delete messages for everyone, copy messages, and forward messages as well.
 
+Preview of ChatHub 
+![ChatHub Preview](/ChatHub-Preview.png)  
+
+
 ✨ Features
 
 🔐 Sign Up & Login with secure authentication </br>
